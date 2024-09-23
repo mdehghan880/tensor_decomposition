@@ -6,24 +6,25 @@ import argparse
 import csv
 from pathlib import Path
 from os.path import dirname, join
-import tensors.synthetic_tensors as synthetic_tensors
-import tensors.real_tensors as real_tensors
+import tensor_decomposition
+import tensor_decomposition.tensors.synthetic_tensors as synthetic_tensors
+import tensor_decomposition.tensors.real_tensors as real_tensors
 import argparse
-import arg_defs as arg_defs
+import tensor_decomposition.utils.arg_defs as arg_defs
 import csv
 
-from utils import save_decomposition_results
+from tensor_decomposition.utils.utils import save_decomposition_results
+from tensor_decomposition.CPD.common_kernels import get_residual,get_residual_sp
+from tensor_decomposition.CPD.NLS import CP_fastNLS_Optimizer
 
 parent_dir = dirname(__file__)
 results_dir = join(parent_dir, 'results')
 
 def CP_NLS(tenpy,A,T,O,num_iter,csv_file=None,Regu=None,method='NLS',args=None,res_calc_freq=1):
 
-    from CPD.common_kernels import get_residual,get_residual_sp
-    from CPD.NLS import CP_fastNLS_Optimizer
 
 
-    if csv_file is not None:
+    if csv_file != None:
         csv_writer = csv.writer(
             csv_file, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
 
@@ -57,7 +58,7 @@ def CP_NLS(tenpy,A,T,O,num_iter,csv_file=None,Regu=None,method='NLS',args=None,r
     for i in range(num_iter):
 
         if i % res_calc_freq == 0 or i==num_iter-1 :
-            if args.sp:
+            if args.sp and O is not None:
                 res = get_residual_sp(tenpy,O,T,A)
             else:
                 res = get_residual(tenpy,T,A)
@@ -82,7 +83,7 @@ def CP_NLS(tenpy,A,T,O,num_iter,csv_file=None,Regu=None,method='NLS',args=None,r
         
         
         if method == 'NLS':
-            [A,iters] = optimizer.step(Regu)
+            A = optimizer.step(Regu)
         else:
             A = optimizer.step(Regu)
         count+=1
@@ -151,7 +152,6 @@ if __name__ == "__main__":
     s = args.s
     order = args.order
     R = args.R
-    nls_iter = args.nls_iter
     num_iter = args.num_iter
     sp_frac = args.sp_fraction
     tensor = args.tensor
@@ -159,11 +159,11 @@ if __name__ == "__main__":
     
 
     if tlib == "numpy":
-        import backend.numpy_ext as tenpy
+        import tensor_decomposition.backend.numpy_ext as tenpy
     elif tlib == "ctf":
-        import backend.ctf_ext as tenpy
+        import tensor_decomposition.backend.ctf_ext as tenpy
         import ctf
-        tepoch = ctf.timer_epoch("ALS")
+        tepoch = ctf.timer_epoch("NLS")
         tepoch.begin();
 
     if tenpy.is_master_proc():
@@ -178,20 +178,20 @@ if __name__ == "__main__":
 
     tenpy.seed(args.seed)
 
-    if args.load_tensor is not '':
+    if args.load_tensor != '':
         T = tenpy.load_tensor_from_file(args.load_tensor+'tensor.npy')
         O = None
     elif tensor == "random":
         if args.decomposition == "CP":
             tenpy.printf("Testing random tensor")
-            [T,O] = synthetic_tensors.init_rand(tenpy,order,s,R,sp_frac,args.seed)
+            [T,O] = synthetic_tensors.rand(tenpy,order,s,R,sp_frac,args.seed)
         if args.decomposition == "Tucker":
             tenpy.printf("Testing random tensor")
             shape = s * np.ones(order).astype(int)
             T = tenpy.random(shape)
             O = None
     elif tensor == "random_col":
-        [T,O] = synthetic_tensors.init_collinearity_tensor(tenpy, s, order, R, args.col, args.seed)
+        [T,O] = synthetic_tensors.collinearity_tensor(tenpy, s, order, R, args.col, args.seed)
     elif tensor == "mom_cons":
         tenpy.printf("Testing order 4 momentum conservation tensor")
         T = synthetic_tensors.init_mom_cons(tenpy,s)
@@ -199,7 +199,7 @@ if __name__ == "__main__":
         sp_res = False
     elif tensor == "mom_cons_sv":
         tenpy.printf("Testing order 3 singular vectors of unfolding of momentum conservation tensor")
-        T = synthetic_tensors.init_mom_cons_sv(tenpy,s)
+        T = synthetic_tensors.mom_cons_sv(tenpy,s)
         O = None
         sp_res = False
     elif tensor == "amino":
@@ -222,14 +222,14 @@ if __name__ == "__main__":
         O = None
     elif tensor == "mm":
         tenpy.printf("Testing matrix multiplication tensor")
-        [T,O] = synthetic_tensors.init_mm(tenpy,s,R,args.seed)
+        [T,O] = synthetic_tensors.mm(tenpy,s,R,args.seed)
     elif tensor == "negrandom":
         tenpy.printf("Testing random tensor with negative entries")
-        [T,O] = synthetic_tensors.init_neg_rand(tenpy,order,s,R,sp_frac,args.seed)
+        [T,O] = synthetic_tensors.neg_rand(tenpy,order,s,R,sp_frac,args.seed)
         
     elif tensor == "randn":
         tenpy.printf("Testing random tensor with normally distributed entries")
-        [T,O] = synthetic_tensors.init_randn(tenpy,order,s,R,sp_frac,args.seed)
+        [T,O] = synthetic_tensors.randn(tenpy,order,s,R,sp_frac,args.seed)
         
     tenpy.printf("The shape of the input tensor is: ", T.shape)
 
@@ -237,24 +237,16 @@ if __name__ == "__main__":
 
     A = []
     
-    if args.load_tensor is not '':
+    if args.load_tensor != '':
         for i in range(T.ndim):
             A.append(tenpy.load_tensor_from_file(args.load_tensor+'mat'+str(i)+'.npy'))
-    elif args.hosvd != 0:
-        if args.decomposition == "CP":
-            for i in range(T.ndim):
-                A.append(tenpy.random((args.hosvd_core_dim[i],R)))
-        elif args.decomposition == "Tucker":
-            from Tucker.common_kernels import hosvd
-            A = hosvd(tenpy, T, args.hosvd_core_dim, compute_core=False)
     else:
         if args.decomposition == "CP":
             for i in range(T.ndim):
                 A.append(tenpy.random((T.shape[i], R)))
-        else:
-            for i in range(T.ndim):
-                A.append(tenpy.random((T.shape[i], args,hosvd_core_dim[i])))
 
-    
+    if args.decomposition == 'Tucker':
+            raise ValueError("Tucker decomposition is not supported via Gauss-Newton.")
+
     CP_NLS(tenpy,A,T,O,num_iter,csv_file,Regu,args.method ,args, args.res_calc_freq)
     

@@ -1,8 +1,9 @@
 import numpy as np
+import numpy.linalg as la
 import sys
 import time
 
-def compute_lin_sysN(tenpy, A,i,Regu):
+def compute_lin_sysN(tenpy, A, i, Regu):
     S = None
     for j in range(len(A)):
         if j != i:
@@ -16,7 +17,7 @@ def compute_lin_sysN(tenpy, A,i,Regu):
 def compute_lin_sys(tenpy, X, Y, Regu):
     return tenpy.dot(tenpy.transpose(X), X) * tenpy.dot(tenpy.transpose(Y), Y) + Regu*tenpy.eye(Y.shape[1])
 
-def randomized_svd(tenpy,A,r,iter=1):
+def randomized_svd(tenpy, A, r, iter=1):
     n = A.shape[1]
     X = tenpy.random((n,r))
     q,_ = tenpy.qr(X)
@@ -37,7 +38,7 @@ def compute_number_of_variables(G):
     return a
 
 
-def flatten_Tensor(tenpy,G):
+def flatten_Tensor(tenpy, G):
     l = compute_number_of_variables(G)
     g = tenpy.zeros(l)
     start = 0
@@ -48,7 +49,7 @@ def flatten_Tensor(tenpy,G):
     return g
 
 
-def reshape_into_matrices(tenpy,x,template):
+def reshape_into_matrices(tenpy, x, template):
     ret = []
     start = 0
     for i in range(len(template)):
@@ -75,14 +76,14 @@ def solve_sys(tenpy, G, RHS):
     X = tenpy.solve_tri(L, X, True, False, False)
     return X
 
-def get_residual3(tenpy,T,A,B,C):
+def get_residual3(tenpy, T, A, B, C):
     t0 = time.time()
     nrm = tenpy.vecnorm(T-tenpy.einsum("ia,ja,ka->ijk",A,B,C))
     t1 = time.time()
     tenpy.printf("Residual computation took",t1-t0,"seconds")
     return nrm
 
-def get_residual_sp3(tenpy,O,T,A,B,C):
+def get_residual_sp3(tenpy, O, T, A, B, C):
     t0 = time.time()
     K = tenpy.TTTP(O,[A,B,C])
     nrm1 = tenpy.vecnorm(K)**2
@@ -97,7 +98,7 @@ def get_residual_sp3(tenpy,O,T,A,B,C):
     tenpy.printf("Sparse residual computation took",t1-t0,"seconds")
     return nrm
 
-def get_residual(tenpy,T,A):
+def get_residual(tenpy, T, A):
     t0 = time.time()
     V = tenpy.ones(T.shape)
     nrm = tenpy.vecnorm(T-tenpy.TTTP(V,A))
@@ -105,7 +106,7 @@ def get_residual(tenpy,T,A):
     #tenpy.printf("Residual computation took",t1-t0,"seconds")
     return nrm
 
-def get_residual_sp(tenpy,O,T,A):
+def get_residual_sp(tenpy, O, T, A):
     t0 = time.time()
     K = tenpy.TTTP(O,A)
     nrm1 = tenpy.vecnorm(K)**2
@@ -120,7 +121,7 @@ def get_residual_sp(tenpy,O,T,A):
     tenpy.printf("Sparse residual computation took",t1-t0,"seconds")
     return nrm
 
-def equilibrate(tenpy,A):
+def equilibrate(tenpy, A):
     nrms = []
     delta = tenpy.ones(A[0].shape[1])
     for i in range(len(A)): 
@@ -131,7 +132,68 @@ def equilibrate(tenpy,A):
         A[i] = A[i]*delta/nrms[i]
     return A
 
-def normalise(tenpy,A):
-    for i in range(len(A)): 
-        A[i] = A[i]/tenpy.einsum('ir,ir->r',A[i],A[i])**0.5
-    return A
+def normalise(tenpy, A, i=None):
+    nrm = 1.0
+    if i is None:
+        for j in range(len(A)):
+            nrm_curr =  tenpy.einsum('ir,ir->r',A[j],A[j])**0.5
+            A[j] = A[j] / nrm_curr
+            nrm *= nrm_curr
+    else:
+        nrm = tenpy.einsum('ir,ir->r',A[i],A[i])**0.5
+        A[i] = A[i] / nrm
+    return A, nrm
+
+def construct_complement(a):
+    B= np.random.randn(a.shape[0],a.shape[0])
+    B[:,0]=a
+    Q,R = la.qr(B)
+    a_Complement = Q[:,1:]
+    return a_Complement
+    
+def construct_Terracini(A):
+    R = A[0].shape[1]
+    s = A[0].shape[0]
+    order = len(A)
+    Us = []
+
+    for r in range(R):
+        U_i = np.zeros((s**order, order * (s - 1) + 1))
+        
+        # Create einsum string dynamically
+        einsum_str = ','.join([chr(ord('a')+j) for j in range(order)]) + '->' + ''.join([chr(ord('a')+j) for j in range(order)])
+        U_i[:, 0] = np.einsum(einsum_str, *(A[i][:, r] for i in range(order))).reshape(-1)
+        
+        # Construct Kronecker products dynamically
+        for i in range(order):
+            components = [construct_complement(A[j][:, r]) if j == i else A[j][:, r].reshape(-1, 1) for j in range(order)]
+            kron_product = components[0]
+            for component in components[1:]:
+                kron_product = np.kron(kron_product, component)
+            
+            start_idx = i * (s - 1) + 1
+            end_idx = (i + 1) * (s - 1) + 1
+            U_i[:, start_idx:end_idx] = kron_product
+        
+        Us.append(U_i)
+
+    U = np.zeros((s**order, R * (order * (s - 1) + 1)))
+    for r in range(R):
+        U[:, r * (order * (s - 1) + 1):(r + 1) * (order * (s - 1) + 1)] = Us[r]
+
+    return U
+
+def compute_condition_number(tenpy,A):
+    if tenpy.name() != 'numpy':
+        tenpy.printf('Condition number computation only available for numpy')
+        return 0
+    else:
+        A_core =[]
+        for i in range(len(A)):
+            Q,R_ = la.qr(A[i])
+            A_core.append(R_)
+        normalised_CP_f,nrm = normalise(tenpy,A_core)
+        U = construct_Terracini(normalised_CP_f)
+        U_,sig,Vt= la.svd(U)
+        tenpy.printf('The condition number is',1/sig[-1])
+    return 1/sig[-1]

@@ -1,8 +1,7 @@
 from tensor_decomposition.CPD.common_kernels import compute_number_of_variables,  flatten_Tensor, reshape_into_matrices,  get_residual
-from scipy.sparse.linalg import LinearOperator
-
-import scipy.sparse.linalg as spsalg
 import numpy as np
+
+
 
 try:
     import Queue as queue
@@ -53,6 +52,17 @@ class CP_fastNLS_Optimizer():
     computing the CP decomposition of a tensor by utilizing tensor contractions
     and preconditioned conjugate gradient to speed up the process of solving
     damped Gauss-Newton problem of CP decomposition.
+
+    The method solves NNLS equation || T - [|A_1 dots A_N |] ||^2 by optimizing
+    A_1, dots, A_N all together by Gauss-Newton method. At each iteration 
+
+    J_x^TJ_xs = -grad f(x)
+
+    is solved where x is the concatenated list of factors above. The solve is performed
+    using a CG method where each block of matrix vector product, J^TJx, is an einsum
+    expression. The CG method is preconditioned by diagonal blocks of J^TJ which
+    correspond to the normal equations with respect to each factor (same as ALS systems)
+
     """
 
     def __init__(self,tenpy,T,A,args=None):
@@ -66,7 +76,6 @@ class CP_fastNLS_Optimizer():
         self.atol = 0
         self.total_iters = 0
         self.maxiter = args.maxiter
-        self.nls_iter = 0
         self.g_norm = 0
         self.temp = None
         self.GG = None
@@ -161,7 +170,7 @@ class CP_fastNLS_Optimizer():
         if self.sp:
             lst = self.A[:]
             for i in range(len(self.A)):
-                out = self.tenpy.tensor(self.A[i].shape,sp=1.)
+                out = self.tenpy.tensor(self.A[i].shape)
                 lst[i] = out 
                 self.tenpy.MTTKRP(self.T,lst,i)
                 grad.append(lst[i] - self.A[i].dot(self.gamma[i][i]))
@@ -215,24 +224,6 @@ class CP_fastNLS_Optimizer():
        
         
         return gg
-    
-
-
-    def create_fast_hessian_contract_LinOp(self,Regu):
-        num_var = compute_number_of_variables(self.A)
-        A = self.A
-        gamma = self.gamma
-        tenpy = self.tenpy
-        template = self.A
-
-        def mv(delta):
-            delta = reshape_into_matrices(tenpy,delta,template)
-            result = fast_hessian_contract(tenpy,delta,A,gamma,Regu)
-            vec = flatten_Tensor(tenpy,result)
-            return vec
-
-        V = LinearOperator(shape = (num_var,num_var), matvec=mv)
-        return V
 
     def matvec(self,Regu,delta):
         return fast_hessian_contract(self.tenpy,delta,self.A,self.gamma,self.diag,Regu)
@@ -367,7 +358,6 @@ class CP_fastNLS_Optimizer():
             
             if self.tenpy.list_vecnorm(g)<tol:
                 counter+=1
-                #end = time.time()
                 break
 
             z = fast_block_diag_precondition(self.tenpy,g,P)
@@ -379,30 +369,12 @@ class CP_fastNLS_Optimizer():
             counter += 1
             
             if counter == self.maxiter:
-                #end = time.time()
                 break
                 
         #end = time.time()
         #self.tenpy.printf("cg took:",end-start)
 
         return x,counter
-
-    def create_block_precondition_LinOp(self,P):
-        num_var = compute_number_of_variables(self.A)
-        tenpy = self.tenpy
-        template = self.A
-
-        def mv(delta):
-
-            delta = reshape_into_matrices(tenpy,delta,template)
-            result = fast_block_diag_precondition(tenpy,delta,P)
-            vec = flatten_Tensor(tenpy,result)
-            return vec
-
-        V = LinearOperator(shape = (num_var,num_var), matvec=mv)
-        return V
-
-
 
     def update_A(self,delta,alpha):
         for i in range(len(delta)):
@@ -439,18 +411,12 @@ class CP_fastNLS_Optimizer():
         P = self.compute_block_diag_preconditioner(Regu)
 
         [self.delta,counter] = self.fast_precond_conjugate_gradient(g,P,Regu)
-        self.total_iters+= counter
+        self.total_iters+= counter    
         
-        
-        self.atol = self.num*self.tenpy.list_vecnorm(self.delta)
-        
-        
-        self.temp = np.zeros_like(self.A)
-        
-        for i in range(len(self.delta)):
-            self.temp[i] = self.A[i].copy()
             
         if self.Arm:
+            self.temp = [self.A[i].copy() for i in range(len(self.A))]
+
             A_res = get_residual(self.tenpy,self.T,self.A)
             alpha = self.armijo_line(A_res,self.delta,g)
             self.update_A(self.delta,alpha)
@@ -461,33 +427,6 @@ class CP_fastNLS_Optimizer():
             
         
         #self.tenpy.printf("total cg iterations",self.total_iters)
-        self.nls_iter+=1
         
         
-        return [self.A,self.total_iters]
-
-
-
-    def step2(self,Regu):
-        
-        def cg_call(v):
-            self.total_iters+=1
-
-        self.compute_G()
-        self.compute_gamma()
-        g = flatten_Tensor(self.tenpy,self.gradient())
-        mult_LinOp = self.create_fast_hessian_contract_LinOp(Regu)
-        P = self.compute_block_diag_preconditioner(Regu)
-        precondition_LinOp = self.create_block_precondition_LinOp(P)
-        [delta,_] = spsalg.cg(mult_LinOp,-1*g,tol=self.cg_tol,M=precondition_LinOp,callback=cg_call,atol=self.atol)
-        #[delta,_] = spsalg.cg(mult_LinOp,-1*g,tol=self.cg_tol,callback=cg_call,atol=self.atol)
-        self.atol = self.num*self.tenpy.norm(delta)
-        delta = reshape_into_matrices(self.tenpy,delta,self.A)
-        self.update_A(delta)
-        self.tenpy.printf('total cg iterations:',self.total_iters)
-        
-        
-        
-        return [self.A,self.total_iters]
-
-
+        return self.A

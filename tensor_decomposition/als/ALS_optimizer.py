@@ -18,6 +18,11 @@ class DTALS_base():
         self.A = A
         self.R = A[0].shape[1]
         self.sp = args.sp
+        # Arguments for fast residual computation
+        self.compute_res = args.fast_residual
+        self.last_inter = None
+        self.n1 = (self.tenpy.vecnorm(T))**2
+        self.S = None
 
     @abc.abstractmethod
     def _einstr_builder(self,M,s,ii):
@@ -35,11 +40,13 @@ class DTALS_base():
         if self.sp:
             s = []
             for i in range(len(self.A)):
-                lst =self.A[:]
-                out = self.tenpy.tensor(self.A[i].shape,sp=1.)
+                lst = self.A[:]
+                out = self.tenpy.tensor(self.A[i].shape)
                 lst[i] = out 
                 self.tenpy.MTTKRP(self.T,lst,i)
                 self.A[i] = self._sp_solve(i,Regu,lst[i])
+                if i == len(self.A)-1 and self.compute_res:
+                    self.last_inter = lst[i]
         else:
             q = queue.Queue()
             for i in range(len(self.A)):
@@ -64,8 +71,23 @@ class DTALS_base():
                     ss.remove(ii)
                     s.append((ss,N))
                 self.A[i] = self._solve(i,Regu,s)
+                if i == len(self.A)-1 and self.compute_res:
+                    self.last_inter = s[-1][1]
         return self.A
 
+    def compute_fast_residual(self):
+        """Function to compute residual by using intermediates from last subsweep (assuming last factor
+           optimized in the end). Note that this computation is prone to numerical errors, 
+           avoid using when near solution.
+        
+           The fast computation is based on
+           || T - [|A,B,C|]||^2 = ||T||^2 + || (A^TA)*(B^TB)*(C^TC)||^2 - 2 <T,[|A,B,C|]>,
+           <T,[|A,B,C|]> = Tr (C^T MTTTKRP(T, A,B) )
+        """
+
+        n2 = self.tenpy.einsum('rz,ir,iz->',self.S,self.A[-1],self.A[-1])
+        n3 = self.tenpy.einsum('ir,ir->',self.last_inter,self.A[-1])
+        return np.sqrt(self.n1 + n2 - 2*n3)
 
 @six.add_metaclass(abc.ABCMeta)
 class PPALS_base():

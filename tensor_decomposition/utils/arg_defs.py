@@ -35,9 +35,9 @@ def add_general_arguments(parser):
     parser.add_argument(
         '--R-app',
         type=int,
-        default=10,
+        default=None,
         metavar='int',
-        help='Approximate rank (default: 10)')
+        help='Approximate rank (default: None here but changed to R)')
     parser.add_argument(
         '--num-iter',
         type=int,
@@ -132,30 +132,6 @@ def add_general_arguments(parser):
         metavar='float',
         help='Tolerance for stopping the iteration. default = 0.99')
     parser.add_argument(
-        '--thresh',
-        type=int,
-        default=10,
-        metavar='int',
-        help='Threshhold for inverting singular vals (default : 10)')
-    parser.add_argument(
-        '--reduce-thresh',
-        type=int,
-        default=0,
-        metavar='int',
-        help='Reduce threhshold for hybrid algorithm (default : 0)')
-    parser.add_argument(
-        '--reduce-thresh-freq',
-        type=int,
-        default=5,
-        metavar='int',
-        help='Reduce threhshold iteration frequency for hybrid algorithm (default : 5)')
-    parser.add_argument(
-        '--calc-cond',
-        type=int,
-        default=1,
-        metavar='int',
-        help='Calculate CPD condition number (default : 1)')
-    parser.add_argument(
         '--res-calc-freq',
         default=1,
         type=int,
@@ -166,6 +142,13 @@ def add_general_arguments(parser):
         action='store_true',
         help="Whether to save the tensor to file.")
     parser.add_argument(
+        '--fast-residual',
+        type=int,
+        default=0,
+        metavar= 'int',
+        help='Enable fast residual calculation by using intermediates from the algorithm. Useful for large scale experiments for CPD (default: False)'
+        )
+    parser.add_argument(
         '--load-tensor',
         type=str,
         default='',
@@ -173,6 +156,12 @@ def add_general_arguments(parser):
         help=
         'Where to load the tensor if the file exists. Empty means it starts from scratch. E.g. --load-tensor results/YOUR-FOLDER/ (do not forget the /)'
         )
+    parser.add_argument(
+        '--calc-cond',
+        type=bool,
+        default= False,
+        metavar='bool',
+        help='Calculate CPD condition number (default : False)')
 
 def add_pp_arguments(parser):
     parser.add_argument(
@@ -281,6 +270,32 @@ def add_sparse_arguments(parser):
         metavar='int',
         help='sparse decomposition (default: 0)')
 
+def add_amdm_arguments(parser):
+    parser.add_argument(
+        '--thresh',
+        type=float,
+        default=None,
+        metavar='float',
+        help='Threshhold for ratio of inverting singular vals (default : None)')
+    parser.add_argument(
+        '--reduce-val',
+        type=bool,
+        default=False,
+        metavar='bool',
+        help='Reduce number of singular values to be inverted for hybrid algorithm (default : False)')
+    parser.add_argument(
+        '--reduce-val-freq',
+        type=int,
+        default=5,
+        metavar='int',
+        help='Reduce threhshold iteration frequency for hybrid algorithm (default : 5)')
+    parser.add_argument(
+        '--num-vals',
+        type=int,
+        default=None,
+        metavar='int',
+        help='Number of singular values inverted (default : None here but reset to rank in the file)')
+
 def add_nls_arguments(parser):
     parser.add_argument(
     '--nls-tol',
@@ -305,7 +320,7 @@ def add_nls_arguments(parser):
     type=float,
     default=0,
     metavar='float',
-    help='For controlling the last step tolerance for nls (default:0)')
+    help='For controlling the step computed by GN (default:0)')
     parser.add_argument(
     '--switch-tol',
     type=float,

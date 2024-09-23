@@ -118,7 +118,7 @@ def dot(A, B):
 
 
 def svd(A, r=None):
-    return ctf.svd(A, r)
+    return ctf.svd(A,r)
 
 
 def svd_rand(A, r):

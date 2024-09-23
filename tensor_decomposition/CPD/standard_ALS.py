@@ -18,12 +18,20 @@ class CP_DTALS_Optimizer(DTALS_base):
         return einstr
 
     def _solve(self, i, Regu, s):
-        return solve_sys(self.tenpy,
-                         compute_lin_sysN(self.tenpy, self.A, i, Regu),
-                         s[-1][1])
+        if i == len(self.A) -1 and self.compute_res:
+            self.S = compute_lin_sysN(self.tenpy, self.A, i, Regu)
+            return solve_sys(self.tenpy,self.S,s[-1][1])
+        else:
+            return solve_sys(self.tenpy,
+                            compute_lin_sysN(self.tenpy, self.A, i, Regu),
+                            s[-1][1])
 
     def _sp_solve(self,i,Regu,g):
-        return solve_sys(self.tenpy,
+        if i == len(self.A) -1 and self.compute_res:
+            self.S = compute_lin_sysN(self.tenpy, self.A, i, Regu)
+            return solve_sys(self.tenpy,self.S,g)
+        else:
+            return solve_sys(self.tenpy,
                          compute_lin_sysN(self.tenpy, self.A, i, Regu),
                          g)
 

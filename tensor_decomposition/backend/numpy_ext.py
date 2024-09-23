@@ -34,7 +34,7 @@ def TTTP(T, A):
     A2.append(T)
     return np.einsum(einstr, *A2,optimize=True)
 
-def MTTKRP(T,A,idx):
+def MTTKRP(T, A, idx):
     T_inds = "".join([chr(ord('a')+i) for i in range(T.ndim)])
     einstr = ""
     A2 = []
@@ -56,13 +56,13 @@ def tensor(shape, sp, *args2):
     return np.ndarray(shape, *args2)
 
 
-def list_add(list_A,list_B):
+def list_add(list_A, list_B):
     return [A+B for (A,B) in zip(list_A,list_B)]
 
-def scalar_mul(sclr,list_A):
+def scalar_mul(sclr, list_A):
     return [sclr*A for A in list_A]
 
-def mult_lists(list_A,list_B):
+def mult_lists(list_A, list_B):
     s = 0
     for i in range(len(list_A)):
         s+= np.einsum('ij,ij->',list_A[i],list_B[i],optimize=True)
@@ -83,7 +83,7 @@ def list_vecnorm(list_A):
         
     return s**0.5
 
-def scl_list_add(scl,list_A,list_B):
+def scl_list_add(scl, list_A, list_B):
     x= []
     for i in range(len(list_A)):
         x.append(list_A[i]+scl*list_B[i])
@@ -103,7 +103,7 @@ def vecnorm(T):
 def norm(v):
     return la.norm(v)
 
-def dot(A,B):
+def dot(A, B):
     return np.dot(A,B)
 
 def eigvalh(A):
@@ -112,7 +112,7 @@ def eigvalh(A):
 def eigvalsh(A):
     return la.eigvalsh(A)
 
-def svd(A,r=None):
+def svd(A, r=None):
     U,s,VT = la.svd(A,full_matrices=False)
     if r is not None:
         U = U[:,:r]
@@ -149,7 +149,7 @@ def ones(shape):
 def zeros(shape):
     return np.zeros(shape)
 
-def dot_product(a,b):
+def dot_product(a, b):
     return np.inner(a.reshape(-1),b.reshape(-1))
 
 def sum(A, axes=None):
@@ -179,7 +179,7 @@ def argmax(A, axis=0):
 def qr(A):
     return la.qr(A)
 
-def reshape(A,shape,order='F'):
+def reshape(A,shape, order='F'):
     return np.reshape(A,shape,order)
 
 def einsvd(operand, tns, r=None, transpose=True, compute_uv=True, full_matrices=True, mult_sv=False):
@@ -250,3 +250,4 @@ def einsvd(operand, tns, r=None, transpose=True, compute_uv=True, full_matrices=
 
 def squeeze(A):
     return A.squeeze()
+

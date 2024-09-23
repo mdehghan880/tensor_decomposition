@@ -12,7 +12,7 @@ import argparse
 import tensor_decomposition.utils.arg_defs as arg_defs
 import csv
 from tensor_decomposition.utils.utils import save_decomposition_results
-from tensor_decomposition.CPD.common_kernels import get_residual
+from tensor_decomposition.CPD.common_kernels import get_residual,get_residual_sp,compute_condition_number
 from tensor_decomposition.CPD.standard_ALS import CP_DTALS_Optimizer, CP_PPALS_Optimizer
 
 parent_dir = dirname(__file__)
@@ -59,18 +59,30 @@ def CP_ALS(tenpy,
     for i in range(num_iter):
 
         if i % res_calc_freq == 0 or i == num_iter - 1 or not flag_dt:
-            if args.sp:
-                res = get_residual_sp(tenpy,O,T,A)
+            if args.fast_residual and i != 0:
+               res = optimizer.compute_fast_residual()
             else:
-                res = get_residual(tenpy, T, A)
+                if args.sp and O is not None:
+                    res = get_residual_sp(tenpy,O,T,A)
+                else:
+                    res = get_residual(tenpy, T, A)
             fitness = 1 - res / normT
 
-            if tenpy.is_master_proc():
-                print("[", i, "] Residual is", res, "fitness is: ", fitness)
-                # write to csv file
-                if csv_file is not None:
-                    csv_writer.writerow([i, time_all, res, fitness, flag_dt])
-                    csv_file.flush()
+            if args.calc_cond and R < 15 and tenpy.name() == 'numpy':
+                cond = compute_condition_number(tenpy, A)
+                if tenpy.is_master_proc():
+                    print("[", i, "] Residual is", res, "fitness is: ", fitness)
+                    # write to csv file
+                    if csv_file is not None:
+                        csv_writer.writerow([i, time_all, res, fitness, flag_dt,cond])
+                        csv_file.flush()
+            else:
+                if tenpy.is_master_proc():
+                    print("[", i, "] Residual is", res, "fitness is: ", fitness)
+                    # write to csv file
+                    if csv_file is not None:
+                        csv_writer.writerow([i, time_all, res, fitness, flag_dt])
+                        csv_file.flush()
 
         if res < tol:
             print('Method converged in', i, 'iterations')
@@ -107,8 +119,8 @@ def Tucker_ALS(tenpy,
                args=None,
                res_calc_freq=1):
 
-    from Tucker.common_kernels import get_residual
-    from Tucker.standard_ALS import Tucker_DTALS_Optimizer, Tucker_PPALS_Optimizer
+    from tensor_decomposition.Tucker.common_kernels import get_residual
+    from tensor_decomposition.Tucker.standard_ALS import Tucker_DTALS_Optimizer, Tucker_PPALS_Optimizer
 
     flag_dt = True
 
@@ -183,6 +195,12 @@ if __name__ == "__main__":
     tensor = args.tensor
     tlib = args.tlib
     sp_frac = args.sp_fraction
+    if args.R_app is None:
+        R_app = args.R
+    else:
+        R_app = args.R_app
+
+
 
     if tlib == "numpy":
         import tensor_decomposition.backend.numpy_ext as tenpy
@@ -192,18 +210,23 @@ if __name__ == "__main__":
         tepoch = ctf.timer_epoch("ALS")
         tepoch.begin()
 
+
     if tenpy.is_master_proc():
         # print the arguments
         for arg in vars(args):
             print(arg + ':', getattr(args, arg))
         # initialize the csv file
         if is_new_log:
-            csv_writer.writerow(
-                ['iterations', 'time', 'residual', 'fitness', 'dt_step'])
+            if args.calc_cond and R < 15:
+                csv_writer.writerow(
+                    ['iterations', 'time', 'residual', 'fitness', 'dt_step', 'cond'])
+            else:
+                csv_writer.writerow(
+                    ['iterations', 'time', 'residual', 'fitness', 'dt_step'])
 
     tenpy.seed(args.seed)
 
-    if args.load_tensor is not '':
+    if args.load_tensor != '':
         T = tenpy.load_tensor_from_file(args.load_tensor + 'tensor.npy')
         O = None
     elif tensor == "random":
@@ -240,10 +263,11 @@ if __name__ == "__main__":
 
     tenpy.printf("The shape of the input tensor is: ", T.shape)
 
+
     Regu = args.regularization
 
     A = []
-    if args.load_tensor is not '':
+    if args.load_tensor != '':
         for i in range(T.ndim):
             A.append(
                 tenpy.load_tensor_from_file(args.load_tensor + 'mat' + str(i) +
@@ -251,21 +275,21 @@ if __name__ == "__main__":
     elif args.hosvd != 0:
         if args.decomposition == "CP":
             for i in range(T.ndim):
-                A.append(tenpy.random((args.hosvd_core_dim[i], R)))
+                A.append(tenpy.random((args.hosvd_core_dim[i], R_app)))
         elif args.decomposition == "Tucker":
-            from Tucker.common_kernels import hosvd
+            from tensor_decomposition.Tucker.common_kernels import hosvd
             A = hosvd(tenpy, T, args.hosvd_core_dim, compute_core=False)
     else:
         if args.decomposition == "CP":
             for i in range(T.ndim):
-                A.append(tenpy.random((T.shape[i], R)))
+                A.append(tenpy.random((T.shape[i], R_app)))
         else:
             for i in range(T.ndim):
                 A.append(tenpy.random((T.shape[i], args, hosvd_core_dim[i])))
 
     if args.decomposition == "CP":
         if args.hosvd:
-            from Tucker.common_kernels import hosvd
+            from tensor_decomposition.Tucker.common_kernels import hosvd
             transformer, compressed_T = hosvd(tenpy,
                                               T,
                                               args.hosvd_core_dim,
