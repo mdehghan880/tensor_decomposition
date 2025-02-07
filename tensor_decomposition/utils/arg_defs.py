@@ -41,13 +41,13 @@ def add_general_arguments(parser):
         help='Input number of runs (default: 5)')
     parser.add_argument(
         '--type_noisy_tensor',
-        default="new_model",
+        default="old_model",
         metavar='string',
         choices=[
             'old_model',
             'new_model'
             ],
-        help='choose type of noisy tensor to test, available: old_model, new_model (default: new_model)')
+        help='choose type of noisy tensor to test, available: old_model, new_model (default: old_model)')
     ############################################################
     parser.add_argument(
         '--order',
