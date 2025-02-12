@@ -5,6 +5,12 @@ import os
 import csv
 from pathlib import Path
 from os.path import dirname, join
+# correct_path = "/home/maryam/Documents/tensor_decomposition-reorg_cleanup_new1/tensor_decomposition-reorg_cleanup"
+# if correct_path not in sys.path:
+#     sys.path.insert(0, correct_path)
+
+import tensor_decomposition.tensors.synthetic_tensors as synthetic_tensors
+
 import tensor_decomposition
 import tensor_decomposition.tensors.synthetic_tensors as synthetic_tensors
 import tensor_decomposition.tensors.real_tensors as real_tensors
@@ -16,14 +22,14 @@ from tensor_decomposition.CPD.common_kernels import get_residual,get_residual_sp
 from tensor_decomposition.CPD.standard_ALS import CP_DTALS_Optimizer, CP_PPALS_Optimizer
 ##########################################
 import Generate_plots
-import error_computation
+#import error_computation
 from scipy.linalg import svd
 import numpy.linalg as la
 import matplotlib.pyplot as plt
 import copy
 import random
-from run_als_new import CP_ALS
-from run_mahalanobis_new import CP_Mahalanobis
+from run_als import CP_ALS
+from run_mahalanobis import CP_Mahalanobis
 from generate_initial_guess import generate_initial_guess
 from generate_input_tensor import generate_tensor
 ##########################################
