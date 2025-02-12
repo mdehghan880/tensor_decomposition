@@ -94,8 +94,8 @@ def add_general_arguments(parser):
     parser.add_argument(
         '--tensor',
         #default="random",
-        default="noisy_tensor",
-        #default = "random_col",
+        #default="noisy_tensor",
+        default = "random_col",
         metavar='string',
         choices=[
             'noisy_tensor'
