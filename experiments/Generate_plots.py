@@ -50,7 +50,7 @@ def plot_results(residuals, norm_mahalanobis, final_residuals, mean_residuals, s
     plt.grid(linestyle='--')
     plt.legend( prop={'size': 15})
     #plt.title(f'Noisy tensors with s={s} and the level of noise $\epsilon={epsilon}$ and $\alpha={alph}$')
-    plt.title(f'Noisy Tensors with s={s} and the Level of Noise $\epsilon={epsilon}$ and $\\alpha={alph}$')
+    plt.title(f'Noisy Tensors with s={s} and the Level of Noise $\\epsilon={epsilon}$ and $\\alpha={alph}$')
     plt.xlabel('iterations')
     plt.ylabel("absolute residual")
     #plt.savefig('./Change_R_abs_res_s10_new.pdf',bbox_inches='tight')
@@ -78,7 +78,7 @@ def plot_results(residuals, norm_mahalanobis, final_residuals, mean_residuals, s
     plt.grid(linestyle='--')
     plt.legend( prop={'size': 15})
     #plt.title(f'Noisy tensors with s={s} and the level of noise $\epsilon={epsilon}$ and $\alpha={alph}$')
-    plt.title(f'Noisy Tensors with s={s} and the Level of Noise $\epsilon={epsilon}$ and $\\alpha={alph}$')
+    plt.title(f'Noisy Tensors with s={s} and the Level of Noise $\\epsilon={epsilon}$ and $\\alpha={alph}$')
 
     plt.xlabel('iterations')
     plt.ylabel(r"$||T-[A,B,C]||_{M^{-1}}$")
