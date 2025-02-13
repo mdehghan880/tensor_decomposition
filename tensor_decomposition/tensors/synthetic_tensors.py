@@ -3,7 +3,7 @@ import sys
 import time
 
 import numpy.linalg as la
-import error_computation
+#import error_computation
 from scipy.linalg import svd
 
 
