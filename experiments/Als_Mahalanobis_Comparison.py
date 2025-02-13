@@ -5,14 +5,16 @@ import os
 import csv
 from pathlib import Path
 from os.path import dirname, join
-# correct_path = "/home/maryam/Documents/tensor_decomposition-reorg_cleanup_new1/tensor_decomposition-reorg_cleanup"
-# if correct_path not in sys.path:
-#     sys.path.insert(0, correct_path)
+
+parent_dir = dirname(__file__)
+tensor_dir = join(parent_dir, 'tensor_decomposition')
+
+sys.path.insert(0, tensor_dir)
 
 import tensor_decomposition.tensors.synthetic_tensors as synthetic_tensors
 
 import tensor_decomposition
-import tensor_decomposition.tensors.synthetic_tensors as synthetic_tensors
+# import tensor_decomposition.tensors.synthetic_tensors as synthetic_tensors
 import tensor_decomposition.tensors.real_tensors as real_tensors
 import argparse
 import tensor_decomposition.utils.arg_defs as arg_defs
